@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tom & Jerry Cursor Chase</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Comic Sans MS', 'Chalkboard SE', 'Comic Neue', cursive;
+            overflow: hidden;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            cursor: none;
+            touch-action: none;
+        }
+
+        #gameCanvas {
+            display: block;
+            background: linear-gradient(180deg, #87ceeb 0%, #98d8e8 50%, #b0e0e6 100%);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            z-index: 10;
+        }
+
+        .badge {
+            background: linear-gradient(135deg, #ffd89b 0%, #19547b 100%);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 25px;
+            font-size: 18px;
+            font-weight: bold;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.4);
+            border: 3px solid white;
+            animation: badgePulse 2s ease-in-out infinite;
+        }
+
+        @keyframes badgePulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 50%, #c44569 100%);
+            padding: 40px 60px;
+            border-radius: 30px;
+            text-align: center;
+            display: none;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            border: 5px solid white;
+            z-index: 100;
+            animation: gameOverAppear 0.5s ease-out;
+        }
+
+        @keyframes gameOverAppear {
+            from {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.5);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }
+        }
+
+        #gameOver h1 {
+            color: white;
+            font-size: 48px;
+            margin-bottom: 20px;
+            text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.5);
+        }
+
+        #gameOver p {
+            color: white;
+            font-size: 24px;
+            margin: 10px 0;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.4);
+        }
+
+        #playAgainBtn {
+            background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 24px;
+            border-radius: 50px;
+            cursor: pointer;
+            margin-top: 20px;
+            font-weight: bold;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+            border: 3px solid white;
+        }
+
+        #playAgainBtn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+        }
+
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px 30px;
+            border-radius: 20px;
+            font-size: 16px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            z-index: 10;
+            border: 2px solid #667eea;
+        }
+
+        #instructions.hidden {
+            display: none;
+        }
+
+        .particle {
+            position: absolute;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        @media (max-width: 768px) {
+            .badge {
+                font-size: 14px;
+                padding: 8px 15px;
+            }
+
+            #gameOver h1 {
+                font-size: 36px;
+            }
+
+            #gameOver p {
+                font-size: 18px;
+            }
+
+            #playAgainBtn {
+                font-size: 20px;
+                padding: 12px 30px;
+            }
+
+            #instructions {
+                font-size: 12px;
+                padding: 10px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="ui">
+        <div class="badge" id="scoreDisplay">Score: 0</div>
+        <div class="badge" id="timeDisplay">Time: 0s</div>
+        <div class="badge" id="levelDisplay">Level: 1</div>
+    </div>
+
+    <div id="instructions">
+        Move your mouse/finger to control Jerry! Press SPACEBAR to dash away from Tom!
+    </div>
+
+    <div id="gameOver">
+        <h1>Game Over!</h1>
+        <p id="finalScore">Score: 0</p>
+        <p id="finalTime">Survived: 0s</p>
+        <p id="finalLevel">Level Reached: 1</p>
+        <button id="playAgainBtn">Play Again</button>
+    </div>
+
+    <script>
+        // Canvas setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Set canvas size
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Audio setup
+        const sounds = {
+            meow: createSound([200, 250, 200], 0.3, 'sine'),
+            squeak: createSound([800, 1000, 800], 0.2, 'sine'),
+            collision: createSound([100, 50, 25], 0.5, 'sawtooth'),
+            powerup: createSound([400, 600, 800, 1000], 0.3, 'sine'),
+            dash: createSound([600, 400], 0.2, 'square')
+        };
+
+        // Simple sound generator
+        function createSound(frequencies, duration, type) {
+            return function() {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                oscillator.type = type;
+                gainNode.gain.value = 0.1;
+
+                const now = audioContext.currentTime;
+                const stepDuration = duration / frequencies.length;
+
+                frequencies.forEach((freq, i) => {
+                    oscillator.frequency.setValueAtTime(freq, now + i * stepDuration);
+                });
+
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + duration);
+                oscillator.start(now);
+                oscillator.stop(now + duration);
+            };
+        }
+
+        // Game state
+        let gameState = {
+            score: 0,
+            time: 0,
+            level: 1,
+            isGameOver: false,
+            startTime: Date.now(),
+            lastLevelUp: Date.now()
+        };
+
+        // Jerry (mouse cursor)
+        const jerry = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            targetX: canvas.width / 2,
+            targetY: canvas.height / 2,
+            size: 25,
+            speed: 0.15,
+            isDashing: false,
+            dashCooldown: 0,
+            slowEffect: 0
+        };
+
+        // Tom (chaser cat)
+        const tom = {
+            x: 100,
+            y: 100,
+            size: 35,
+            baseSpeed: 0.02,
+            speed: 0.02,
+            speedIncrease: 0.0005,
+            slowEffect: 0
+        };
+
+        // Power-ups and traps
+        let items = [];
+        const itemSpawnInterval = 3000; // 3 seconds
+        let lastItemSpawn = Date.now();
+
+        // Particles
+        let particles = [];
+
+        // Input handling
+        let touchActive = false;
+
+        canvas.addEventListener('mousemove', (e) => {
+            jerry.targetX = e.clientX;
+            jerry.targetY = e.clientY;
+            hideInstructions();
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            jerry.targetX = touch.clientX;
+            jerry.targetY = touch.clientY;
+            touchActive = true;
+            hideInstructions();
+        });
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            jerry.targetX = touch.clientX;
+            jerry.targetY = touch.clientY;
+            touchActive = true;
+            hideInstructions();
+        });
+
+        // Keyboard dash
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && !jerry.isDashing && jerry.dashCooldown <= 0 && !gameState.isGameOver) {
+                e.preventDefault();
+                dash();
+                hideInstructions();
+            }
+        });
+
+        // Touch dash (double tap)
+        let lastTap = 0;
+        canvas.addEventListener('touchend', (e) => {
+            const currentTime = Date.now();
+            if (currentTime - lastTap < 300) {
+                dash();
+            }
+            lastTap = currentTime;
+        });
+
+        function hideInstructions() {
+            document.getElementById('instructions').classList.add('hidden');
+        }
+
+        function dash() {
+            if (jerry.dashCooldown > 0) return;
+
+            jerry.isDashing = true;
+            jerry.dashCooldown = 2000; // 2 second cooldown
+            sounds.dash();
+
+            // Quick dash away from Tom
+            const dx = jerry.x - tom.x;
+            const dy = jerry.y - tom.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist > 0) {
+                jerry.x += (dx / dist) * 150;
+                jerry.y += (dy / dist) * 150;
+
+                // Keep Jerry in bounds
+                jerry.x = Math.max(jerry.size, Math.min(canvas.width - jerry.size, jerry.x));
+                jerry.y = Math.max(jerry.size, Math.min(canvas.height - jerry.size, jerry.y));
+            }
+
+            setTimeout(() => {
+                jerry.isDashing = false;
+            }, 300);
+        }
+
+        // Item spawning
+        function spawnItem() {
+            const isCheese = Math.random() > 0.4; // 60% chance for cheese
+            const item = {
+                x: Math.random() * (canvas.width - 100) + 50,
+                y: Math.random() * (canvas.height - 100) + 50,
+                size: 20,
+                type: isCheese ? 'cheese' : 'trap',
+                rotation: 0,
+                scale: 0
+            };
+            items.push(item);
+        }
+
+        // Update game
+        function update() {
+            if (gameState.isGameOver) return;
+
+            // Update time and score
+            const elapsed = (Date.now() - gameState.startTime) / 1000;
+            gameState.time = Math.floor(elapsed);
+            gameState.score = Math.floor(elapsed * 10);
+
+            // Level up every 20 seconds
+            if (Date.now() - gameState.lastLevelUp > 20000) {
+                gameState.level++;
+                gameState.lastLevelUp = Date.now();
+                sounds.powerup();
+            }
+
+            // Update Jerry position with smooth easing
+            const jerrySpeed = jerry.slowEffect > 0 ? jerry.speed * 0.5 : jerry.speed;
+            jerry.x += (jerry.targetX - jerry.x) * jerrySpeed;
+            jerry.y += (jerry.targetY - jerry.y) * jerrySpeed;
+
+            // Update effects
+            if (jerry.slowEffect > 0) jerry.slowEffect--;
+            if (tom.slowEffect > 0) tom.slowEffect--;
+            if (jerry.dashCooldown > 0) jerry.dashCooldown -= 16;
+
+            // Update Tom position with easing (chase Jerry)
+            const tomSpeed = tom.slowEffect > 0 ? tom.speed * 0.3 : tom.speed;
+            tom.x += (jerry.x - tom.x) * tomSpeed;
+            tom.y += (jerry.y - tom.y) * tomSpeed;
+
+            // Increase Tom's speed over time
+            tom.speed = tom.baseSpeed + (gameState.level - 1) * tom.speedIncrease;
+
+            // Spawn items
+            if (Date.now() - lastItemSpawn > itemSpawnInterval) {
+                spawnItem();
+                lastItemSpawn = Date.now();
+            }
+
+            // Update items
+            items.forEach((item, index) => {
+                item.rotation += 0.05;
+                if (item.scale < 1) item.scale += 0.05;
+
+                // Check collision with Jerry
+                const dx = jerry.x - item.x;
+                const dy = jerry.y - item.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < jerry.size + item.size) {
+                    if (item.type === 'cheese') {
+                        // Power-up: slow Tom
+                        tom.slowEffect = 180; // 3 seconds at 60fps
+                        sounds.powerup();
+                        createParticles(item.x, item.y, '#FFD700', 20);
+                        gameState.score += 50;
+                    } else {
+                        // Trap: slow Jerry
+                        jerry.slowEffect = 120; // 2 seconds at 60fps
+                        sounds.squeak();
+                        createParticles(item.x, item.y, '#8B4513', 15);
+                    }
+                    items.splice(index, 1);
+                }
+            });
+
+            // Check collision between Tom and Jerry
+            const dx = tom.x - jerry.x;
+            const dy = tom.y - jerry.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < tom.size + jerry.size - 10) {
+                gameOver();
+            }
+
+            // Update particles
+            particles = particles.filter(p => {
+                p.life--;
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.2; // gravity
+                return p.life > 0;
+            });
+
+            // Update UI
+            document.getElementById('scoreDisplay').textContent = `Score: ${gameState.score}`;
+            document.getElementById('timeDisplay').textContent = `Time: ${gameState.time}s`;
+            document.getElementById('levelDisplay').textContent = `Level: ${gameState.level}`;
+        }
+
+        // Create particle effects
+        function createParticles(x, y, color, count) {
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 8,
+                    vy: (Math.random() - 0.5) * 8 - 2,
+                    life: 60,
+                    color: color,
+                    size: Math.random() * 5 + 2
+                });
+            }
+        }
+
+        // Draw game
+        function draw() {
+            // Clear canvas with sky gradient
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#87ceeb');
+            gradient.addColorStop(0.5, '#98d8e8');
+            gradient.addColorStop(1, '#b0e0e6');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw grass at bottom
+            ctx.fillStyle = '#90EE90';
+            ctx.fillRect(0, canvas.height - 100, canvas.width, 100);
+
+            // Draw some clouds
+            drawCloud(100, 80, 60);
+            drawCloud(canvas.width - 150, 120, 50);
+            drawCloud(canvas.width / 2, 60, 70);
+
+            // Draw items
+            items.forEach(item => {
+                ctx.save();
+                ctx.translate(item.x, item.y);
+                ctx.rotate(item.rotation);
+                ctx.scale(item.scale, item.scale);
+
+                if (item.type === 'cheese') {
+                    // Draw cheese
+                    ctx.fillStyle = '#FFD700';
+                    ctx.beginPath();
+                    ctx.moveTo(-15, -10);
+                    ctx.lineTo(15, -10);
+                    ctx.lineTo(12, 10);
+                    ctx.lineTo(-12, 10);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.strokeStyle = '#FFA500';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+
+                    // Cheese holes
+                    ctx.fillStyle = '#FFA500';
+                    ctx.beginPath();
+                    ctx.arc(-5, 0, 3, 0, Math.PI * 2);
+                    ctx.arc(5, -3, 2, 0, Math.PI * 2);
+                    ctx.arc(3, 5, 2.5, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    // Draw trap
+                    ctx.fillStyle = '#8B4513';
+                    ctx.fillRect(-15, -5, 30, 10);
+                    ctx.fillStyle = '#654321';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 12, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#333';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+
+                ctx.restore();
+            });
+
+            // Draw particles
+            particles.forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life / 60;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            });
+
+            // Draw Tom (cat)
+            drawTom(tom.x, tom.y, tom.size, tom.slowEffect > 0);
+
+            // Draw Jerry (mouse)
+            drawJerry(jerry.x, jerry.y, jerry.size, jerry.isDashing, jerry.slowEffect > 0);
+
+            // Draw dash cooldown indicator
+            if (jerry.dashCooldown > 0) {
+                const cooldownPercent = jerry.dashCooldown / 2000;
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                ctx.fillRect(jerry.x - 20, jerry.y + 35, 40, 5);
+                ctx.fillStyle = '#4caf50';
+                ctx.fillRect(jerry.x - 20, jerry.y + 35, 40 * (1 - cooldownPercent), 5);
+            }
+        }
+
+        // Draw cloud
+        function drawCloud(x, y, size) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.beginPath();
+            ctx.arc(x, y, size * 0.5, 0, Math.PI * 2);
+            ctx.arc(x + size * 0.4, y, size * 0.4, 0, Math.PI * 2);
+            ctx.arc(x - size * 0.4, y, size * 0.4, 0, Math.PI * 2);
+            ctx.arc(x, y - size * 0.3, size * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw Tom
+        function drawTom(x, y, size, isSlowed) {
+            ctx.save();
+            ctx.translate(x, y);
+
+            // Slow effect
+            if (isSlowed) {
+                ctx.fillStyle = 'rgba(100, 200, 255, 0.3)';
+                ctx.beginPath();
+                ctx.arc(0, 0, size + 10, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Body
+            ctx.fillStyle = '#A0522D';
+            ctx.beginPath();
+            ctx.ellipse(0, 5, size * 0.8, size, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Head
+            ctx.fillStyle = '#CD853F';
+            ctx.beginPath();
+            ctx.arc(0, -5, size * 0.7, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Ears
+            ctx.fillStyle = '#A0522D';
+            ctx.beginPath();
+            ctx.moveTo(-size * 0.5, -size * 0.5);
+            ctx.lineTo(-size * 0.7, -size * 0.9);
+            ctx.lineTo(-size * 0.3, -size * 0.6);
+            ctx.closePath();
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(size * 0.5, -size * 0.5);
+            ctx.lineTo(size * 0.7, -size * 0.9);
+            ctx.lineTo(size * 0.3, -size * 0.6);
+            ctx.closePath();
+            ctx.fill();
+
+            // Eyes
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(-size * 0.25, -size * 0.2, size * 0.2, 0, Math.PI * 2);
+            ctx.arc(size * 0.25, -size * 0.2, size * 0.2, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(-size * 0.25, -size * 0.2, size * 0.1, 0, Math.PI * 2);
+            ctx.arc(size * 0.25, -size * 0.2, size * 0.1, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Nose
+            ctx.fillStyle = '#FF69B4';
+            ctx.beginPath();
+            ctx.arc(0, size * 0.05, size * 0.15, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Whiskers
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(-size * 0.4, 0);
+            ctx.lineTo(-size * 0.9, -size * 0.1);
+            ctx.moveTo(-size * 0.4, size * 0.1);
+            ctx.lineTo(-size * 0.9, size * 0.1);
+            ctx.moveTo(size * 0.4, 0);
+            ctx.lineTo(size * 0.9, -size * 0.1);
+            ctx.moveTo(size * 0.4, size * 0.1);
+            ctx.lineTo(size * 0.9, size * 0.1);
+            ctx.stroke();
+
+            // Tail
+            ctx.strokeStyle = '#A0522D';
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.moveTo(0, size * 0.8);
+            ctx.quadraticCurveTo(-size * 0.5, size * 1.2, -size * 0.8, size * 0.9);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        // Draw Jerry
+        function drawJerry(x, y, size, isDashing, isSlowed) {
+            ctx.save();
+            ctx.translate(x, y);
+
+            // Dash effect
+            if (isDashing) {
+                ctx.fillStyle = 'rgba(255, 255, 100, 0.5)';
+                ctx.beginPath();
+                ctx.arc(0, 0, size + 15, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Slow effect
+            if (isSlowed) {
+                ctx.fillStyle = 'rgba(139, 69, 19, 0.3)';
+                ctx.beginPath();
+                ctx.arc(0, 0, size + 8, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Body
+            ctx.fillStyle = '#A9A9A9';
+            ctx.beginPath();
+            ctx.ellipse(0, 3, size * 0.6, size * 0.8, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Head
+            ctx.fillStyle = '#C0C0C0';
+            ctx.beginPath();
+            ctx.arc(0, -3, size * 0.6, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Ears
+            ctx.fillStyle = '#FFB6C1';
+            ctx.beginPath();
+            ctx.arc(-size * 0.45, -size * 0.45, size * 0.3, 0, Math.PI * 2);
+            ctx.arc(size * 0.45, -size * 0.45, size * 0.3, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#C0C0C0';
+            ctx.beginPath();
+            ctx.arc(-size * 0.45, -size * 0.45, size * 0.35, 0, Math.PI * 2);
+            ctx.arc(size * 0.45, -size * 0.45, size * 0.35, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Eyes
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(-size * 0.2, -size * 0.15, size * 0.12, 0, Math.PI * 2);
+            ctx.arc(size * 0.2, -size * 0.15, size * 0.12, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Nose
+            ctx.fillStyle = '#FFB6C1';
+            ctx.beginPath();
+            ctx.arc(0, 0, size * 0.1, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Whiskers
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(-size * 0.3, size * 0.05);
+            ctx.lineTo(-size * 0.7, 0);
+            ctx.moveTo(-size * 0.3, size * 0.15);
+            ctx.lineTo(-size * 0.7, size * 0.15);
+            ctx.moveTo(size * 0.3, size * 0.05);
+            ctx.lineTo(size * 0.7, 0);
+            ctx.moveTo(size * 0.3, size * 0.15);
+            ctx.lineTo(size * 0.7, size * 0.15);
+            ctx.stroke();
+
+            // Tail
+            ctx.strokeStyle = '#A9A9A9';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(0, size * 0.6);
+            ctx.quadraticCurveTo(size * 0.3, size * 1, size * 0.5, size * 1.2);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        // Game over
+        function gameOver() {
+            if (gameState.isGameOver) return;
+
+            gameState.isGameOver = true;
+            sounds.collision();
+
+            // Create explosion particles
+            createParticles(jerry.x, jerry.y, '#ff6b6b', 50);
+            createParticles(jerry.x, jerry.y, '#ffd700', 30);
+
+            // Show game over screen
+            setTimeout(() => {
+                document.getElementById('finalScore').textContent = `Score: ${gameState.score}`;
+                document.getElementById('finalTime').textContent = `Survived: ${gameState.time}s`;
+                document.getElementById('finalLevel').textContent = `Level Reached: ${gameState.level}`;
+                document.getElementById('gameOver').style.display = 'block';
+            }, 500);
+        }
+
+        // Reset game
+        function resetGame() {
+            gameState = {
+                score: 0,
+                time: 0,
+                level: 1,
+                isGameOver: false,
+                startTime: Date.now(),
+                lastLevelUp: Date.now()
+            };
+
+            jerry.x = canvas.width / 2;
+            jerry.y = canvas.height / 2;
+            jerry.targetX = canvas.width / 2;
+            jerry.targetY = canvas.height / 2;
+            jerry.isDashing = false;
+            jerry.dashCooldown = 0;
+            jerry.slowEffect = 0;
+
+            tom.x = 100;
+            tom.y = 100;
+            tom.speed = tom.baseSpeed;
+            tom.slowEffect = 0;
+
+            items = [];
+            particles = [];
+            lastItemSpawn = Date.now();
+
+            document.getElementById('gameOver').style.display = 'none';
+            document.getElementById('instructions').classList.remove('hidden');
+        }
+
+        // Play again button
+        document.getElementById('playAgainBtn').addEventListener('click', resetGame);
+
+        // Game loop
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start game
+        gameLoop();
+    </script>
+</body>
+</html>
